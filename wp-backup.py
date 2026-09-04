@@ -92,13 +92,17 @@ def run_rclone(args: list[str]) -> str:
 
 def sync_files(src: Path, dest: str) -> None:
     log(f'[files] syncing {src} -> {dest}')
-    run_rclone([
+    args = [
         'sync', str(src), dest,
         '--transfers', '4',
         '--checkers', '8',
         '--fast-list',
         '--stats', '0',
-    ])
+    ]
+    min_age = os.environ.get('MIN_FILE_AGE', '').strip()
+    if min_age:
+        args += ['--min-age', min_age]
+    run_rclone(args)
     log('[files] sync done')
 
 
