@@ -43,6 +43,33 @@ Installer akan bertanya:
 <remote>:backup/<site>/db/       ← dump .sql.gz harian
 ```
 
+## Scan & Batch Install (banyak site sekaligus)
+
+Untuk server dengan banyak website (panel Hestia/Vesta), scan dulu lalu pasang semuanya urut dari yang **terkecil** — supaya backup pertama cepat kelihatan hasilnya dan bandwidth tidak jebol:
+
+```bash
+# 1. Pindai semua website di server
+sudo python3 scan-sites.py --json /tmp/sites.json
+
+#    Hasilnya: tabel ukuran + DB + status backup per site, terkecil dulu.
+#    Lihat saja:  sudo python3 scan-sites.py
+
+# 2. Cek rencana instalasi tanpa menulis apa pun
+sudo python3 install-batch.py /tmp/sites.json \
+    --remote gdrive --dry-run
+
+# 3. Pasang semua site yang belum terbackup
+sudo python3 install-batch.py /tmp/sites.json \
+    --remote gdrive \
+    --start-hour 2 --interval-min 30 \
+    --fonnte-token TOKEN --fonnte-target 08xxxx
+```
+
+- Jadwal otomatis di-**stagger**: site 1 jam 02:00, site 2 jam 02:30, dst. (atur lewat `--start-hour` & `--interval-min`)
+- Site yang sudah dipasang via `install.sh` otomatis dilewati
+- DB name terdeteksi otomatis dari `wp-config.php`
+- Urutan eksekusi tetap aman walau ada yang telat: **lock per site** membuat run yang tumpang tindih otomatis skip
+
 ## Menambah Site Kedua, Ketiga, dst.
 
 Jalankan lagi `sudo bash install.sh` di server yang sama — jawab pertanyaan dengan data site baru. Semua site hidup berdampingan (env & cron terpisah per site).
