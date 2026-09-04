@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -36,8 +37,12 @@ def find_sites() -> list[dict]:
                 continue
             seen.add(str(public))
             domain = public.parent.name
-            if domain in ('web', 'html', 'public'):     # bukan domain (Hestia level /home/user/web)
+            if domain in ('web', 'html', 'public', 'public_html',
+                          'Akses-PHPMYADMIN', 'php-myadmin'):
                 continue
+            low = domain.lower()
+            if any(x in low for x in ('staging', '-dev', 'test.', 'demo')):
+                continue  # staging/dev/test/demo tidak dipetakan
             sites.append({
                 'user': public.parent.parent.name,
                 'domain': domain,
@@ -59,18 +64,19 @@ def dir_size_bytes(path: str) -> int:
         return 0
 
 
-def extract_db_name(wp_config: str | None) -> str | None:
+def extract_db_creds(wp_config: str | None) -> tuple[str | None, str, str]:
+    """Ambil DB_NAME, DB_USER, DB_PASSWORD dari wp-config.php."""
     if not wp_config:
-        return None
+        return None, '', ''
     try:
-        for line in Path(wp_config).read_text(errors='replace').splitlines():
-            if "define( 'DB_NAME'" in line or 'define( "DB_NAME"' in line:
-                parts = line.split(',')
-                if len(parts) > 1:
-                    return parts[1].strip().strip('); ').strip('\'" ')
+        t = Path(wp_config).read_text(errors='replace')
+
+        def g(key):
+            m = re.search(r"define\(\s*['\"]" + key + r"['\"]\s*,\s*['\"](.*?)['\"]\s*\)", t)
+            return m.group(1) if m else ''
+        return g('DB_NAME') or None, g('DB_USER'), g('DB_PASSWORD')
     except Exception:
-        pass
-    return None
+        return None, '', ''
 
 
 def installed_sites() -> set[str]:
@@ -107,12 +113,14 @@ def main() -> int:
         # ukur wp-content kalau ada (itu yang dibackup), kalau tidak ukur public_html
         target = s['wp_content'] or s['public_html']
         size = dir_size_bytes(target)
-        db = extract_db_name(s['wp_config'])
+        db_name, db_user, db_pass = extract_db_creds(s['wp_config'])
         key = s['domain']
         rows.append({
             **s,
             'size_bytes': size,
-            'db_name': db,
+            'db_name': db_name,
+            'db_user': db_user,
+            'db_password': db_pass,
             'installed': key in done_keys,
         })
 

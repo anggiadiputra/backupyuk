@@ -101,7 +101,21 @@ if [[ -z "$REMOTE_NAME" ]]; then
       say "Sekarang otorisasi Google Drive."
       say "Karena server ini tidak punya browser, jalankan DI LAPTOP Anda:"
       echo ""
-      echo -e "    ${B}rclone authorize \"drive\" \"1073292335940-ok9m21oa1tb8ufu44mmsh3s2sh114u89.apps.googleusercontent.com\" \"$(rclone config show "$REMOTE_NAME" | grep client_secret | cut -d' ' -f3-)\"${N}"
+      CLIENT_ID_USED=$(rclone config show "$REMOTE_NAME" | grep '^client_id' | cut -d' ' -f3-)
+      if [[ -z "$CLIENT_ID_USED" ]]; then
+        ask "Client ID Google (kosongkan = pakai shared bawaan rclone, lebih lambat):"
+        read -rp "> " CID
+        ask "Client Secret:"
+        read -rp "> " CSEC
+        [[ -n "$CID" ]] && rclone config update "$REMOTE_NAME" client_id "$CID" client_secret "$CSEC" >/dev/null
+      fi
+      CID_ARG=$(rclone config show "$REMOTE_NAME" | grep '^client_id' | cut -d' ' -f3-)
+      CSEC_ARG=$(rclone config show "$REMOTE_NAME" | grep '^client_secret' | cut -d' ' -f3-)
+      if [[ -n "$CID_ARG" && -n "$CSEC_ARG" ]]; then
+        echo -e "    ${B}rclone authorize \"drive\" \"$CID_ARG\" \"$CSEC_ARG\"${N}"
+      else
+        echo -e "    ${B}rclone authorize \"drive\"${N}"
+      fi
       echo ""
       say "(install rclone di laptop dulu kalau belum: brew install rclone)"
       say "Login akun Google -> Allow -> copy token yang muncul di laptop"
@@ -152,6 +166,10 @@ DEFAULT_KEY="$SITE_NAME"
 ask "Kunci unik untuk path backup [${DEFAULT_KEY}]:"
 read -rp "> " DEST_KEY
 DEST_KEY="${DEST_KEY:-$DEFAULT_KEY}"
+if [[ ! "$DEST_KEY" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  warn "DEST_KEY hanya boleh huruf, angka, titik, garis bawah, strip."
+  exit 1
+fi
 
 ask "Folder yang di-backup (mis. /home/user/web/site.com/public_html/wp-content):"
 read -rp "> " SRC_DIR

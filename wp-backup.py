@@ -41,7 +41,8 @@ def load_env_file(path: Path) -> None:
         if not line or line.startswith('#') or '=' not in line:
             continue
         key, value = line.split('=', 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        # timpa (bukan setdefault) supaya env file selalu sumber kebenaran
+        os.environ[key.strip()] = value.strip()
 
 
 def require_env(name: str) -> str:
@@ -64,9 +65,11 @@ def send_fonnte(message: str) -> None:
         '-F', f'message={message}',
     ]
     try:
-        # jeda anti-banned: tunggu 3 menit sebelum kirim notif
+        # jeda anti-banned hanya untuk notif SUKSES; gagal langsung kirim
         import time as _time
-        _time.sleep(int(os.environ.get("FONNTE_DELAY", "180")))
+        delay = int(os.environ.get('FONNTE_DELAY', '180'))
+        if delay > 0 and '*BACKUP SUKSES*' in message:
+            _time.sleep(delay)
         res = subprocess.run(cmd, capture_output=True, text=True, check=False)
         output = (res.stdout or '').strip()
         if res.returncode != 0:
@@ -172,12 +175,8 @@ def main() -> int:
     if len(sys.argv) > 1:
         load_env_file(Path(sys.argv[1]))
     else:
-        # fallback: cari satu-satunya env di /etc/awan-backup/
-        envs = sorted(Path('/etc/awan-backup').glob('*.env'))
-        if not envs:
-            print('Usage: wp-backup.py /etc/awan-backup/<site>.env', file=sys.stderr)
-            return 2
-        load_env_file(envs[0])
+        print('Usage: wp-backup.py /etc/awan-backup/<site>.env', file=sys.stderr)
+        return 2
 
     site_name = require_env('SITE_NAME')
     dest_key = require_env('DEST_KEY')
