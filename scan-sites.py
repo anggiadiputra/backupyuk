@@ -20,26 +20,31 @@ HOME_DIRS = [Path('/home')]
 
 
 def find_sites() -> list[dict]:
-    """Temukan semua public_html di bawah /home/*/web/*/public_html."""
+    """Temukan semua public_html di server.
+
+    Mendukung dua struktur:
+    - Hestia/Vesta : /home/<user>/web/<domain>/public_html
+    - CyberPanel   : /home/<hash>/<Domain>/public_html
+    """
     sites: list[dict] = []
+    seen = set()
     for home in HOME_DIRS:
         if not home.is_dir():
             continue
-        for user_dir in sorted(home.iterdir()):
-            web_dir = user_dir / 'web'
-            if not web_dir.is_dir():
+        for public in sorted(home.glob('*/*/public_html')):   # Hestia & CyberPanel
+            if not public.is_dir() or str(public) in seen:
                 continue
-            for domain_dir in sorted(web_dir.iterdir()):
-                public = domain_dir / 'public_html'
-                if not public.is_dir():
-                    continue
-                sites.append({
-                    'user': user_dir.name,
-                    'domain': domain_dir.name,
-                    'public_html': str(public),
-                    'wp_content': str(public / 'wp-content') if (public / 'wp-content').is_dir() else None,
-                    'wp_config': str(public / 'wp-config.php') if (public / 'wp-config.php').is_file() else None,
-                })
+            seen.add(str(public))
+            domain = public.parent.name
+            if domain in ('web', 'html', 'public'):     # bukan domain (Hestia level /home/user/web)
+                continue
+            sites.append({
+                'user': public.parent.parent.name,
+                'domain': domain,
+                'public_html': str(public),
+                'wp_content': str(public / 'wp-content') if (public / 'wp-content').is_dir() else None,
+                'wp_config': str(public / 'wp-config.php') if (public / 'wp-config.php').is_file() else None,
+            })
     return sites
 
 
