@@ -64,6 +64,9 @@ def send_fonnte(message: str) -> None:
         '-F', f'message={message}',
     ]
     try:
+        # jeda anti-banned: tunggu 3 menit sebelum kirim notif
+        import time as _time
+        _time.sleep(int(os.environ.get("FONNTE_DELAY", "180")))
         res = subprocess.run(cmd, capture_output=True, text=True, check=False)
         output = (res.stdout or '').strip()
         if res.returncode != 0:
