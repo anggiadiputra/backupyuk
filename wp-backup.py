@@ -109,6 +109,8 @@ def sync_files(src: Path, dest: str) -> None:
 def dump_database(db_name: str, tmpdir: Path) -> Path:
     stamp = datetime.now().strftime('%F_%H%M%S')
     gz_path = tmpdir / f'{db_name}_{stamp}.sql.gz'
+    db_user = os.environ.get('DB_USER', '').strip()
+    db_pass = os.environ.get('DB_PASSWORD', '').strip()
     cmd = [
         'mariadb-dump' if shutil.which('mariadb-dump') else 'mysqldump',
         '--single-transaction',
@@ -116,8 +118,12 @@ def dump_database(db_name: str, tmpdir: Path) -> Path:
         '--triggers',
         '--events',
         '--no-tablespaces',
-        db_name,
     ]
+    if db_user:
+        cmd += [f'--user={db_user}']
+        if db_pass:
+            cmd += [f'--password={db_pass}']
+    cmd.append(db_name)
     log(f'[db] dumping {db_name} -> {gz_path.name}')
     with gzip.open(gz_path, 'wb', compresslevel=9) as gz:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
