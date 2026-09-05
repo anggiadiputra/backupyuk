@@ -52,6 +52,30 @@ def require_env(name: str) -> str:
     return value
 
 
+def human_size(nbytes: float) -> str:
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if nbytes < 1024:
+            return f'{nbytes:.0f} {unit}' if unit in ('B',) else f'{nbytes:.1f} {unit}'
+        nbytes /= 1024
+    return f'{nbytes:.1f} TB'
+
+
+def dir_size_bytes(path: Path) -> int:
+    try:
+        out = subprocess.run(['du', '-sb', str(path)], capture_output=True, text=True, check=False).stdout
+        return int(out.split()[0]) if out.strip() else 0
+    except Exception:
+        return 0
+
+
+def count_files(path: Path) -> int:
+    try:
+        out = subprocess.run(['find', str(path), '-type', 'f'], capture_output=True, text=True, check=False).stdout
+        return len(out.splitlines())
+    except Exception:
+        return 0
+
+
 def send_fonnte(message: str) -> None:
     token = os.environ.get('FONNTE_TOKEN', '').strip()
     target = os.environ.get('FONNTE_TARGET', '').strip()
@@ -194,40 +218,54 @@ def main() -> int:
         if not src.is_dir():
             raise RuntimeError(f'SRC_DIR tidak ada: {src}')
         sync_files(src, files_dest)
+        files_size = dir_size_bytes(src)
+        files_count = count_files(src)
         dump_path = None
         if db_name:
             with tempfile.TemporaryDirectory(prefix='wpbackup-') as td:
                 dump_path = dump_database(db_name, Path(td))
                 upload_db_dump(db_dest, dump_path)
             prune_old_db_dumps(db_dest, keep_days)
-        duration = (datetime.now() - start_time).total_seconds()
+        duration_s = (datetime.now() - start_time).total_seconds()
+        if duration_s >= 3600:
+            duration = f"{duration_s/3600:.1f} jam"
+        elif duration_s >= 60:
+            duration = f"{duration_s/60:.1f} menit"
+        else:
+            duration = f"{duration_s:.0f} detik"
         send_fonnte(
             f"✅ *BACKUP SUKSES*\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"🌐 Site: {site_name}\n"
-            f"🖥 Host: {host_name}\n"
-            f"⏱ Durasi: {duration:.0f} detik\n"
+            f"🌐 Domain: {site_name}\n"
+            f"🖥 Server: {host_name}\n"
+            f"⏱ Durasi: {duration}\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"📁 Files: sync OK\n"
-            + (f"🗄 DB: {dump_path.name}\n" if dump_path else "")
+            f"📁 Files: {human_size(files_size)} ({files_count} file)\n"
+            + (f"🗄 DB: {dump_path.name} ({human_size(dump_path.stat().st_size)})\n" if dump_path else "🗄 DB: -\n")
             + (f"🗑 Retensi DB: {keep_days} hari\n" if db_name else "")
-            + f"🕐 {datetime.now().strftime('%d %b %Y %H:%M')}"
+            + f"🕐 {datetime.now().strftime('%d %b %Y %H:%M')} WIB"
         )
         log(f'[{site_name}] backup completed in {duration:.0f}s')
         return 0
     except Exception as exc:
-        duration = (datetime.now() - start_time).total_seconds()
+        duration_s = (datetime.now() - start_time).total_seconds()
+        if duration_s >= 3600:
+            duration = f"{duration_s/3600:.1f} jam"
+        elif duration_s >= 60:
+            duration = f"{duration_s/60:.1f} menit"
+        else:
+            duration = f"{duration_s:.0f} detik"
         send_fonnte(
             f"❌ *BACKUP GAGAL*\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"🌐 Site: {site_name}\n"
-            f"🖥 Host: {host_name}\n"
-            f"⏱ Durasi: {duration:.0f} detik\n"
+            f"🌐 Domain: {site_name}\n"
+            f"🖥 Server: {host_name}\n"
+            f"⏱ Durasi: {duration}\n"
             f"━━━━━━━━━━━━━━━\n"
             f"⚠️ Error: {type(exc).__name__}\n"
             f"{str(exc)[:300]}\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"🕐 {datetime.now().strftime('%d %b %Y %H:%M')}"
+            f"🕐 {datetime.now().strftime('%d %b %Y %H:%M')} WIB"
         )
         raise
 
